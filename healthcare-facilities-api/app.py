@@ -5,7 +5,7 @@ Optimized for Databricks Apps deployment
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 import os
 
@@ -20,7 +20,7 @@ except ImportError:
 app = FastAPI(
     title="Healthcare Facilities Trust Scoring API",
     description="REST API for healthcare facility discovery with trust scores and geospatial search",
-    version="1.0.0"
+    version="1.0.1"
 )
 
 # CORS - Update with your frontend domain in production
@@ -61,16 +61,13 @@ def get_db_connection():
         access_token=ACCESS_TOKEN
     )
 
-def execute_query(query: str, params: dict = None):
+def execute_query(query: str):
     """Execute SQL query and return results"""
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        if params:
-            cursor.execute(query, params)
-        else:
-            cursor.execute(query)
+        cursor.execute(query)
         
         columns = [desc[0] for desc in cursor.description]
         results = cursor.fetchall()
@@ -86,21 +83,49 @@ def execute_query(query: str, params: dict = None):
 # === Pydantic Models ===
 class FacilityResponse(BaseModel):
     facility_name: str
-    facility_type: Optional[str]
+    facility_type: Optional[str] = None
     latitude: float
     longitude: float
-    city: Optional[str]
-    state: Optional[str]
-    pincode: Optional[str]
+    city: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
     trust_score: int
     risk_category: str
-    trust_reason: Optional[str]
+    trust_reason: Optional[str] = None
     map_marker_color: str
-    phone: Optional[str]
-    website: Optional[str]
-    has_facebook: bool
-    has_twitter: bool
-    has_linkedin: bool
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    has_facebook: bool = False
+    has_twitter: bool = False
+    has_linkedin: bool = False
+    
+    class Config:
+        extra = "ignore"  # Allow extra fields from database
+    
+    @field_validator('trust_score', mode='before')
+    @classmethod
+    def convert_trust_score(cls, v):
+        if v is None:
+            return 0
+        return int(v)
+    
+    @field_validator('latitude', 'longitude', mode='before')
+    @classmethod
+    def convert_coords(cls, v):
+        if v is None:
+            return 0.0
+        return float(v)
+    
+    @field_validator('has_facebook', 'has_twitter', 'has_linkedin', mode='before')
+    @classmethod
+    def convert_bool(cls, v):
+        if v is None or v == '':
+            return False
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ('true', '1', 'yes')
+        return bool(v)
 
 class SearchResponse(BaseModel):
     count: int
@@ -120,24 +145,29 @@ async def root():
     return {
         "status": "healthy",
         "service": "Healthcare Facilities API",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "config": config_status
     }
 
 @app.get("/api/v1/facilities/search/city", response_model=SearchResponse)
 async def search_by_city(
     city: str = Query(..., description="City name to search"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum results to return")
+    limit: int = Query(100, ge=1, le=1000, description="Maximum results to return")
 ):
     """Search facilities by city name"""
     query = f"""
-    SELECT * FROM {TABLE_NAME}
-    WHERE LOWER(city) = LOWER(%(city)s)
+    SELECT 
+        facility_name, facility_type, latitude, longitude,
+        city, state, pincode, trust_score, risk_category,
+        trust_reason, map_marker_color, phone, website,
+        has_facebook, has_twitter, has_linkedin
+    FROM {TABLE_NAME}
+    WHERE LOWER(city) = LOWER('{city.replace("'", "''")}')
     ORDER BY trust_score DESC
-    LIMIT %(limit)s
+    LIMIT {limit}
     """
     
-    results = execute_query(query, {"city": city, "limit": limit})
+    results = execute_query(query)
     
     return {
         "count": len(results),
@@ -147,17 +177,22 @@ async def search_by_city(
 @app.get("/api/v1/facilities/search/pincode", response_model=SearchResponse)
 async def search_by_pincode(
     pincode: str = Query(..., description="Pincode to search"),
-    limit: int = Query(100, ge=1, le=500)
+    limit: int = Query(100, ge=1, le=1000)
 ):
     """Search facilities by postal code"""
     query = f"""
-    SELECT * FROM {TABLE_NAME}
-    WHERE pincode = %(pincode)s
+    SELECT 
+        facility_name, facility_type, latitude, longitude,
+        city, state, pincode, trust_score, risk_category,
+        trust_reason, map_marker_color, phone, website,
+        has_facebook, has_twitter, has_linkedin
+    FROM {TABLE_NAME}
+    WHERE pincode = '{pincode.replace("'", "''")}'
     ORDER BY trust_score DESC
-    LIMIT %(limit)s
+    LIMIT {limit}
     """
     
-    results = execute_query(query, {"pincode": pincode, "limit": limit})
+    results = execute_query(query)
     
     return {
         "count": len(results),
@@ -174,20 +209,19 @@ async def search_by_bounds(
 ):
     """Search facilities within map viewport bounds"""
     query = f"""
-    SELECT * FROM {TABLE_NAME}
-    WHERE latitude BETWEEN %(min_lat)s AND %(max_lat)s
-      AND longitude BETWEEN %(min_lon)s AND %(max_lon)s
+    SELECT 
+        facility_name, facility_type, latitude, longitude,
+        city, state, pincode, trust_score, risk_category,
+        trust_reason, map_marker_color, phone, website,
+        has_facebook, has_twitter, has_linkedin
+    FROM {TABLE_NAME}
+    WHERE latitude BETWEEN {min_lat} AND {max_lat}
+      AND longitude BETWEEN {min_lon} AND {max_lon}
     ORDER BY trust_score DESC
-    LIMIT %(limit)s
+    LIMIT {limit}
     """
     
-    results = execute_query(query, {
-        "min_lat": min_lat,
-        "max_lat": max_lat,
-        "min_lon": min_lon,
-        "max_lon": max_lon,
-        "limit": limit
-    })
+    results = execute_query(query)
     
     return {
         "count": len(results),
@@ -204,25 +238,24 @@ async def search_by_radius(
     """Search facilities within radius using H3 proximity"""
     # Using haversine distance formula
     query = f"""
-    SELECT *,
+    SELECT 
+        facility_name, facility_type, latitude, longitude,
+        city, state, pincode, trust_score, risk_category,
+        trust_reason, map_marker_color, phone, website,
+        has_facebook, has_twitter, has_linkedin,
         2 * 6371 * ASIN(SQRT(
-            POW(SIN((%(lat)s - latitude) * PI() / 180 / 2), 2) +
-            COS(%(lat)s * PI() / 180) * COS(latitude * PI() / 180) *
-            POW(SIN((%(lon)s - longitude) * PI() / 180 / 2), 2)
+            POW(SIN(({lat} - latitude) * PI() / 180 / 2), 2) +
+            COS({lat} * PI() / 180) * COS(latitude * PI() / 180) *
+            POW(SIN(({lon} - longitude) * PI() / 180 / 2), 2)
         )) AS distance_km
     FROM {TABLE_NAME}
     WHERE h3_index_res7 IS NOT NULL
-    HAVING distance_km <= %(radius_km)s
+    HAVING distance_km <= {radius_km}
     ORDER BY distance_km ASC, trust_score DESC
-    LIMIT %(limit)s
+    LIMIT {limit}
     """
     
-    results = execute_query(query, {
-        "lat": lat,
-        "lon": lon,
-        "radius_km": radius_km,
-        "limit": limit
-    })
+    results = execute_query(query)
     
     # Remove distance_km from response
     for result in results:
@@ -238,11 +271,11 @@ async def get_facility_detail(facility_name: str):
     """Get detailed information for a specific facility"""
     query = f"""
     SELECT * FROM {TABLE_NAME}
-    WHERE facility_name = %(facility_name)s
+    WHERE facility_name = '{facility_name.replace("'", "''")}'
     LIMIT 1
     """
     
-    results = execute_query(query, {"facility_name": facility_name})
+    results = execute_query(query)
     
     if not results:
         raise HTTPException(status_code=404, detail="Facility not found")
@@ -288,10 +321,10 @@ async def get_cities(limit: int = Query(50, ge=1, le=200)):
     WHERE city IS NOT NULL
     GROUP BY city, state
     ORDER BY facility_count DESC
-    LIMIT %(limit)s
+    LIMIT {limit}
     """
     
-    results = execute_query(query, {"limit": limit})
+    results = execute_query(query)
     
     return {
         "count": len(results),
