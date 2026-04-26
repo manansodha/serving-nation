@@ -9,8 +9,8 @@ pydantic<2
 databricks-sql-connector==2.9.3
 
 # Core dependencies (prevent build errors)
-numpy>=1.24.0,<2.0.0
-pandas>=2.0.0,<2.2.0
+pandas==2.2.2
+numpy==1.26.4
 pyarrow>=10.0.0
 
 # Additional dependencies
