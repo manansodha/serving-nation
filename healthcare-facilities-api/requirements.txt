@@ -1,5 +1,17 @@
-fastapi==0.115.0
-uvicorn[standard]==0.32.0
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Pydantic v1 (more compatible)
 pydantic<2
-databricks-sql-connector==3.0.2
+
+# Databricks connector
+databricks-sql-connector==2.9.3
+
+# Core dependencies (prevent build errors)
+numpy>=1.24.0,<2.0.0
+pandas>=2.0.0,<2.2.0
+pyarrow>=10.0.0
+
+# Additional dependencies
 typing-extensions>=4.8.0
