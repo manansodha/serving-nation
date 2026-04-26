@@ -150,7 +150,7 @@ async def root():
 @app.get("/api/v1/facilities/search/city", response_model=SearchResponse)
 async def search_by_city(
     city: str = Query(..., description="City name to search"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum results to return")
+    limit: int = Query(100, ge=1, le=10000, description="Maximum results to return")
 ):
     """Search facilities by city name"""
     query = f"""
@@ -175,7 +175,7 @@ async def search_by_city(
 @app.get("/api/v1/facilities/search/pincode", response_model=SearchResponse)
 async def search_by_pincode(
     pincode: str = Query(..., description="Pincode to search"),
-    limit: int = Query(100, ge=1, le=1000)
+    limit: int = Query(100, ge=1, le=10000)
 ):
     """Search facilities by postal code"""
     query = f"""
@@ -203,7 +203,7 @@ async def search_by_bounds(
     max_lat: float = Query(..., description="Maximum latitude"),
     min_lon: float = Query(..., description="Minimum longitude"),
     max_lon: float = Query(..., description="Maximum longitude"),
-    limit: int = Query(500, ge=1, le=1000)
+    limit: int = Query(500, ge=1, le=10000)
 ):
     """Search facilities within map viewport bounds"""
     query = f"""
@@ -231,7 +231,7 @@ async def search_by_radius(
     lat: float = Query(..., description="Center latitude"),
     lon: float = Query(..., description="Center longitude"),
     radius_km: float = Query(..., ge=0.1, le=100, description="Search radius in kilometers"),
-    limit: int = Query(100, ge=1, le=500)
+    limit: int = Query(100, ge=1, le=10000)
 ):
     """Search facilities within radius using H3 proximity"""
     # Using haversine distance formula
@@ -307,7 +307,7 @@ async def get_statistics():
     }
 
 @app.get("/api/v1/facilities/cities")
-async def get_cities(limit: int = Query(50, ge=1, le=200)):
+async def get_cities(limit: int = Query(50, ge=1, le=10000)):
     """Get list of cities with facility counts"""
     query = f"""
     SELECT 
