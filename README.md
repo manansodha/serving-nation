@@ -22,7 +22,5 @@ Building healthcare facility trust scoring system for 10,000 facilities with age
 Open `Healthcare Facility Trust Scoring.ipynb` in Databricks
 
 ## Dataset
-Source: `hacknation.default.vf_hackathon_healthcare_facilities` (10,000 facilities)
+Source: `vf_hackathon_healthcare_facilities` (10,000 facilities)
 
-## Deployment
-See `/Users/manansodha1512@gmail.com/healthcare_api/` for deployment guides
