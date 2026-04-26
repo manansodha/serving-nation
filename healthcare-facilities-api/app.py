@@ -5,7 +5,7 @@ Optimized for Databricks Apps deployment
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, validator
 from typing import List, Optional
 import os
 
@@ -102,22 +102,20 @@ class FacilityResponse(BaseModel):
     class Config:
         extra = "ignore"  # Allow extra fields from database
     
-    @field_validator('trust_score', mode='before')
-    @classmethod
+    # Pydantic v1 validators
+    @validator('trust_score', pre=True)
     def convert_trust_score(cls, v):
         if v is None:
             return 0
         return int(v)
     
-    @field_validator('latitude', 'longitude', mode='before')
-    @classmethod
+    @validator('latitude', 'longitude', pre=True)
     def convert_coords(cls, v):
         if v is None:
             return 0.0
         return float(v)
     
-    @field_validator('has_facebook', 'has_twitter', 'has_linkedin', mode='before')
-    @classmethod
+    @validator('has_facebook', 'has_twitter', 'has_linkedin', pre=True)
     def convert_bool(cls, v):
         if v is None or v == '':
             return False
